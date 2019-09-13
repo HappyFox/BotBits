@@ -1,2 +1,2 @@
 # BotBits
-robot componets that intersct via nats
+robot componets that interact via nats
