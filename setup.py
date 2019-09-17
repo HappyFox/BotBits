@@ -33,9 +33,9 @@ setup(
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
     ],
-    packages=["sissyBot"],
+    packages=["botBits"],
     python_requires=">=3.7",
-    install_requires=["protobuf", "asyncio-nats-client", "nkeys", "Click>=7"],
+    install_requires=["protobuf>=3.9.0", "asyncio-nats-client", "nkeys", "Click>=7"],
     entry_points="""
         [console_scripts]
         rb_drive=botBits.drive:main
