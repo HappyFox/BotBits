@@ -1,6 +1,8 @@
 import asyncio
+import functools
 import logging
 import os
+import signal
 import sys
 
 import click
@@ -16,21 +18,63 @@ LEFT_MOTOR = "DRIVE_LEFT_MOTOR"
 RIGHT_MOTOR = "DRIVE_RIGHT_MOTOR"
 
 
-async def main_task(loop, config, out_put):
-    addr = f"{config.msg_addr}:{config.msg_port}"
+async def main_task(loop, config, sub_fn):
+    addr = f"nats://{config.msg_addr}:{config.msg_port}"
+
+    async def error_cb(e):
+        print("Error:", e)
+
+    async def closed_cb():
+        print("Connection to NATS is closed.")
+        await asyncio.sleep(0.1, loop=loop)
+        loop.stop()
+
+    async def reconnected_cb():
+        print("Connected to NATS at {}...".format(nc.connected_url.netloc))
+
+    async def subscribe_handler(msg):
+        subject = msg.subject
+        reply = msg.reply
+        data = msg.data.decode()
+        print(
+            "Received a message on '{subject} {reply}': {data}".format(
+                subject=subject, reply=reply, data=data
+            )
+        )
+
+    options = {
+        "io_loop": loop,
+        "error_cb": error_cb,
+        "closed_cb": closed_cb,
+        "reconnected_cb": reconnected_cb,
+        "servers": [addr],
+    }
 
     nats_client = nats.aio.client.Client()
-    await nats_client.connect(addr, loop)
+    await nats_client.connect(**options)
 
-    await nats_client.drain()
+    def signal_handler():
+        if nats_client.is_closed:
+            return
+        print("Disconnecting...")
+        loop.create_task(nats_client.close())
+
+    for sig in ("SIGINT", "SIGTERM"):
+        loop.add_signal_handler(getattr(signal, sig), signal_handler)
+
+    for sub, func in sub_fn:
+        part = functools.partial(func, nats_client)
+        print(sub)
+        await nats_client.subscribe(sub, "", part)
 
 
-class Output:
-    pass
+def mock_drive_cmd(nats, msg):
+    import pdb
+
+    pdb.set_trace()
 
 
-class Mock:
-    pass
+mock_subs = [("drive.cmd", mock_drive_cmd)]
 
 
 @dataclass
@@ -72,10 +116,11 @@ def main(mock):
 
     if mock:
         print("Launching Mock")
-        out = Mock()
+        out = mock_subs
     else:
-        out = Output()
+        out = mock_subs
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main_task(loop, config, out))
+    loop.run_forever()
     loop.close()
