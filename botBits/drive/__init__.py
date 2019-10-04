@@ -8,6 +8,9 @@ import sys
 import click
 import nats.aio
 
+
+import botBits.proto.drive_pb2
+
 from dataclasses import dataclass
 
 
@@ -63,15 +66,14 @@ async def main_task(loop, config, sub_fn):
         loop.add_signal_handler(getattr(signal, sig), signal_handler)
 
     for sub, func in sub_fn:
-        part = functools.partial(func, nats_client)
+        part = functools.partial(func, nats_client, config)
         print(sub)
         await nats_client.subscribe(sub, "", part)
 
 
-def mock_drive_cmd(nats, msg):
-    import pdb
-
-    pdb.set_trace()
+def mock_drive_cmd(nats, config, msg):
+    cmd = botBits.proto.drive_pb2.DriveFrame.FromString(msg.data)
+    print(cmd)
 
 
 mock_subs = [("drive.cmd", mock_drive_cmd)]
